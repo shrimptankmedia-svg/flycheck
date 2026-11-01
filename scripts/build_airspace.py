@@ -123,17 +123,24 @@ def main(kmz_path, out_dir):
         low, high = limits(desc)
         if not low_enough(low):
             continue
-        polys = [ring(c.text) for c in pm.findall(".//k:Polygon/k:outerBoundaryIs/k:LinearRing/k:coordinates", NS)]
+        # Outer ring first, then any holes (GeoJSON polygon order).
+        polys = [[ring(c.text) for c in pg.findall("k:outerBoundaryIs/k:LinearRing/k:coordinates", NS)
+                  + pg.findall("k:innerBoundaryIs/k:LinearRing/k:coordinates", NS)]
+                 for pg in pm.findall(".//k:Polygon", NS)]
+        polys = [p for p in polys if p and len(p[0]) >= 4]
         if not polys:
             continue
         freq = re.search(r"Freq:\s*([\d.]+\s*MHz[^\n<]*)", desc, re.I)
         airspace.append({
             "type": "Feature",
             "properties": {"name": name, "cat": cat, "low": low, "high": high, "freq": freq.group(1).strip() if freq else None},
-            "geometry": {"type": "Polygon", "coordinates": polys} if len(polys) == 1
-            else {"type": "MultiPolygon", "coordinates": [[p] for p in polys]},
+            "geometry": {"type": "Polygon", "coordinates": polys[0]} if len(polys) == 1
+            else {"type": "MultiPolygon", "coordinates": polys},
         })
 
+    # A changed or broken KMZ must not replace the good files in site/data.
+    if len(airspace) < 50 or len(aerodromes) < 300:
+        sys.exit(f"Only {len(airspace)} airspaces, {len(aerodromes)} aerodromes; keeping the existing files")
     source = "ATNS RSA DATA KMZ (" + kml_name(kmz_path) + ")"
     with open(f"{out_dir}/airspace.json", "w") as f:
         json.dump({"type": "FeatureCollection", "source": source, "features": airspace}, f, separators=(",", ":"))

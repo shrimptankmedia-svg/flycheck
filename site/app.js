@@ -10,12 +10,19 @@
   // ---------------------------------------------------------------------------
   const defaults = { drone: "mini-4-pro", rules: "private", unit: "kmh", yellow: 70, place: null };
   function load(key, fallback) {
-    try { return Object.assign({}, fallback, JSON.parse(localStorage.getItem(key)) || {}); } catch (e) { return fallback; }
+    try { return Object.assign({}, fallback, JSON.parse(localStorage.getItem(key)) || {}); } catch (e) { return Object.assign({}, fallback); }
   }
   function save(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* private mode */ }
   }
   const settings = load(STORE, defaults);
+  // Old or corrupt saved values (a drone id that was removed, an unknown unit...) fall back to defaults.
+  if (!C.DRONES.some((x) => x.id === settings.drone)) settings.drone = defaults.drone;
+  if (!C.RULES[settings.rules]) settings.rules = defaults.rules;
+  if (!C.UNITS[settings.unit]) settings.unit = defaults.unit;
+  settings.yellow = +settings.yellow;
+  if (!(settings.yellow >= 50 && settings.yellow <= 90)) settings.yellow = defaults.yellow;
+  if (settings.place && !(isFinite(settings.place.lat) && isFinite(settings.place.lon))) settings.place = null;
   let data = null;      // { fc, kp, aviation, place, fetchedAt }
   let staticData = {};  // { airspace, aerodromes }
   let rated = null;     // rateForecast() result for the current settings
@@ -59,7 +66,7 @@
   // ---------------------------------------------------------------------------
   // Fetching
   // ---------------------------------------------------------------------------
-  const getJson = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(url + " → " + r.status); return r.json(); });
+  const getJson = (url, init) => fetch(url, init).then((r) => { if (!r.ok) throw new Error(url + " → " + r.status); return r.json(); });
   const getText = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(url + " → " + r.status); return r.text(); });
 
   async function loadStatic() {
@@ -83,12 +90,12 @@
       getJson(C.forecastUrl(place.lat, place.lon)),
       getJson(C.KP_3DAY_URL),
       getText(C.KP_27DAY_URL),
-      getJson("data/aviation.json"),
+      getJson("data/aviation.json", { cache: "no-cache" }),
     ]);
     if (fc.status !== "fulfilled") {
-      const cached = load(CACHE, null);
-      if (cached && cached.fcRaw) {
-        data = hydrate(cached);
+      const cached = loadCached();
+      if (cached) {
+        data = cached;
         render("Offline · forecast from " + new Date(cached.fetchedAt).toLocaleString("en-ZA"));
       } else showError("Couldn't load the forecast. Check your connection.");
       return;
@@ -109,6 +116,13 @@
     return { fc: C.parseForecast(raw.fcRaw), kp: C.parseKp(raw.kp3, raw.kp27), aviation: raw.aviation, place: raw.place, fetchedAt: raw.fetchedAt };
   }
 
+  // Last good forecast from localStorage, or null if missing or unreadable.
+  function loadCached() {
+    const cached = load(CACHE, null);
+    if (!cached.fcRaw || !cached.place || !isFinite(cached.place.lat) || !isFinite(cached.place.lon)) return null;
+    try { return hydrate(cached); } catch (e) { return null; }
+  }
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -119,7 +133,9 @@
   const unitLabel = () => C.UNITS[settings.unit].label;
   const hhmm = (iso) => iso.slice(11, 16);
   const endHour = (iso) => String(+iso.slice(11, 13) + 1).padStart(2, "0") + ":00";
-  const dayShort = (date, i) => (i === 0 ? "Today" : new Date(date + "T12:00").toLocaleDateString("en-ZA", { weekday: "short" }));
+  // Today's date at the forecast location (Open-Meteo times are local); a cached forecast may start days ago.
+  const todayDate = () => new Date(Date.now() + (data.fc.utcOffset || 0) * 1000).toISOString().slice(0, 10);
+  const dayShort = (date, today) => (date === today ? "Today" : new Date(date + "T12:00").toLocaleDateString("en-ZA", { weekday: "short" }));
   const dayLong = (date) => new Date(date + "T12:00").toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
   const levelRank = { green: 0, yellow: 1, red: 2 };
   const arrowSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>';
@@ -129,7 +145,7 @@
     const zones = C.zonesAt(staticData.airspace, data.place.lat, data.place.lon);
     let level = null;
     for (const z of zones) {
-      const l = C.AIRSPACE[z.properties.cat][settings.rules];
+      const l = (C.AIRSPACE[z.properties.cat] || C.AIRSPACE.other)[settings.rules];
       if (!level || levelRank[l] > levelRank[level]) level = l;
     }
     return { zones, level };
@@ -161,6 +177,8 @@
     renderHangar();
     renderAirspace();
     renderSettings();
+    // The airspace tab may have been opened before any data arrived.
+    if (!map && !$("v-airspace").hidden) { initMap(); if (map) setTimeout(() => map.invalidateSize(), 0); }
   }
 
   function renderNow(note) {
@@ -196,12 +214,12 @@
 
     // Conditions
     $("droneChip").textContent = d.name.replace("DJI ", "") + " · " + (settings.rules === "private" ? "Private" : "RPL");
-    const today = r.days[0] && r.days[0].date;
+    const today = todayDate();
     const kp = data.kp.byDate[today];
     const metrics = [
       [unitVal(n.wind10), "Wind " + unitLabel()],
       [unitVal(n.wind120), "At 120 m"],
-      [Math.round(n.temp) + "°", "Temp"],
+      [n.temp != null ? Math.round(n.temp) + "°" : "–", "Temp"],
       [(n.precipProb ?? 0) + "%", "Rain"],
       [n.visibility != null ? Math.round(n.visibility / 1000) : "–", "Vis km"],
       [kp != null ? kp.toFixed(1) : "–", "Kp info", true],
@@ -210,7 +228,7 @@
       '<div class="metric"><b' + (info ? ' class="info"' : "") + ">" + esc(v) + "</b><span>" + l + "</span></div>").join("");
 
     // Best window
-    const day0 = r.days[0];
+    const day0 = r.days.find((x) => x.date === today);
     const win = day0 && day0.bestWindow;
     $("bestWindow").textContent = win ? hhmm(win.from) + " – " + endHour(win.to) : "None today";
     $("bestNote").textContent = day0 ? day0.greenHours + " of " + day0.daylightHours + " daylight hours are green" : "";
@@ -225,11 +243,12 @@
     $("weekRules").textContent = r.rules.id === "private" ? "Private" : "RPL / ROC";
 
     const maxH = Math.max(1, ...r.days.map((d) => d.daylightHours));
+    const today = todayDate();
     $("bars").innerHTML = r.days.map((d, i) =>
       '<button type="button" class="bar" data-day="' + i + '" aria-pressed="' + (i === selectedDay) + '" aria-label="' + esc(dayLong(d.date) + ": " + LABEL[d.level] + ", " + d.greenHours + " green hours") + '">' +
       "<b>" + d.greenHours + "h</b>" +
       '<i style="height:' + Math.round(24 + (d.greenHours / maxH) * 100) + "px;background:" + C.COLORS[d.level] + '"></i>' +
-      "<span>" + dayShort(d.date, i) + "</span></button>").join("");
+      "<span>" + dayShort(d.date, today) + "</span></button>").join("");
 
     $("stack").innerHTML = r.days.map((d, i) => {
       const kp = data.kp.byDate[d.date];
@@ -241,7 +260,7 @@
       }
       const hours = r.hours.filter((h) => h.time.startsWith(d.date) && +h.time.slice(11, 13) >= 5 && +h.time.slice(11, 13) <= 19);
       return '<article class="day-card day-open ' + d.level + '" style="z-index:' + (i + 1) + '">' +
-        '<div class="row top-align"><div><div class="condensed">' + (i === 0 ? "Today" : esc(dayLong(d.date))) + "<br>" + LABEL[d.level] + "</div>" +
+        '<div class="row top-align"><div><div class="condensed">' + (d.date === today ? "Today" : esc(dayLong(d.date))) + "<br>" + LABEL[d.level] + "</div>" +
         '<span class="small" style="margin-top:6px">' + esc(dayLong(d.date)) + " · sunrise " + hhmm(d.sunrise) + " · sunset " + hhmm(d.sunset) + "</span></div></div>" +
         '<div class="hours">' + hours.map((h) =>
           '<div class="hour' + (h.daylight ? "" : " dark") + '" title="' + esc(h.time.slice(11, 16) + " " + (h.reasons.map((x) => x.text).join("; ") || "Inside limits")) + '">' +
@@ -319,7 +338,7 @@
             layer.bindPopup("<b>" + esc(p.name) + "</b><br>" + esc(p.low + " – " + p.high) + (p.freq ? "<br>" + esc(p.freq) : "") + "<br><i>" + esc(C.AIRSPACE[cat].note) + "</i>");
             if (cat === "ctr" || cat === "atz" || cat === "prohibited") {
               const short = p.name.split(" : ")[0].replace(/^FAP(\d+)/, "P$1");
-              layer.bindTooltip(short, { permanent: true, direction: "center", className: "zone-tip " + (cat === "prohibited" ? "p" : cat) });
+              layer.bindTooltip(esc(short), { permanent: true, direction: "center", className: "zone-tip " + (cat === "prohibited" ? "p" : cat) });
             }
           },
         }).addTo(map);
@@ -443,7 +462,7 @@
     ].map((x) => "<li>" + x + "</li>").join("");
   }
 
-  function changed() { save(STORE, settings); if (data) render(); else renderSettings(); }
+  function changed() { save(STORE, settings); if (data) render(); else { renderHangar(); renderSettings(); } }
 
   function initEvents() {
     document.querySelectorAll("[data-open-settings]").forEach((b) => b.addEventListener("click", () => $("settings").showModal()));
@@ -459,6 +478,7 @@
       t = setTimeout(async () => {
         try {
           const j = await getJson("https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&name=" + encodeURIComponent(q));
+          if ($("placeSearch").value.trim() !== q) return; // a newer search (or a cleared box) wins
           $("placeResults").innerHTML = (j.results || []).map((p, i) =>
             '<li><button type="button" data-i="' + i + '">' + esc(p.name) + ' <span class="muted">' + esc([p.admin1, p.country].filter(Boolean).join(", ")) + "</span></button></li>").join("") || '<li class="small muted">No matches</li>';
           $("placeResults").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
@@ -468,9 +488,11 @@
             $("placeSearch").value = ""; $("placeResults").innerHTML = "";
             $("settings").close(); refresh();
           }));
-        } catch (err) { $("placeResults").innerHTML = '<li class="small muted">Search failed</li>'; }
+        } catch (err) { if ($("placeSearch").value.trim() === q) $("placeResults").innerHTML = '<li class="small muted">Search failed</li>'; }
       }, 300);
     });
+    // Enter / the keyboard's Search key would submit the dialog form and close the sheet.
+    $("placeSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
     $("copyParam").addEventListener("click", async () => {
       try { await navigator.clipboard.writeText($("widgetParam").textContent); $("copyParam").textContent = "Copied"; }
       catch (e) { $("copyParam").textContent = "Select & copy"; }
@@ -530,16 +552,17 @@
 
   // ---------------------------------------------------------------------------
   initEvents();
+  renderHangar();
   renderSettings();
   window.addEventListener("hashchange", route);
   route();
   loadStatic().then(() => {
-    const cached = load(CACHE, null);
-    if (cached && cached.fcRaw && !data) { data = hydrate(cached); render("Refreshing…"); }
+    const cached = loadCached();
+    if (cached && !data) { data = cached; render("Refreshing…"); }
     return refresh();
-  }).then(() => { if (location.hash === "#airspace") route(); });
+  });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && data && Date.now() - data.fetchedAt > 15 * 60 * 1000) refresh();
+    if (document.visibilityState === "visible" && (!data || Date.now() - data.fetchedAt > 15 * 60 * 1000)) refresh();
   });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

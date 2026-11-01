@@ -13,6 +13,11 @@ const get = async (what) => {
 };
 
 const [metars, tafs] = await Promise.all([get("metar"), get("taf")]);
+// An empty or odd reply must not replace the last good file in the deploy.
+if (!Array.isArray(metars) || !Array.isArray(tafs) || !metars.length) {
+  console.error("No METARs returned; keeping the existing file");
+  process.exit(1);
+}
 const out = {
   generated: new Date().toISOString(),
   source: "aviationweather.gov",

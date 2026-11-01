@@ -137,7 +137,9 @@ function weekRow(w, r, small) {
   row.setPadding(small ? 6 : 7, 10, small ? 6 : 6, 10);
   row.layoutHorizontally();
   row.centerAlignContent();
-  r.days.slice(0, 7).forEach((d, i) => {
+  // Skip days already past (an offline forecast can be a day or more old).
+  const today = r.now.time.slice(0, 10);
+  r.days.filter((d) => d.date >= today).slice(0, 7).forEach((d, i) => {
     if (i > 0) row.addSpacer();
     const col = row.addStack();
     col.layoutVertically();
@@ -148,7 +150,7 @@ function weekRow(w, r, small) {
       col.addSpacer(2);
       const ls = col.addStack();
       ls.addSpacer();
-      const label = i === 0 ? "Tdy" : new Date(d.date + "T12:00").toLocaleDateString("en-ZA", { weekday: "short" }).slice(0, 3);
+      const label = d.date === today ? "Tdy" : new Date(d.date + "T12:00").toLocaleDateString("en-ZA", { weekday: "short" }).slice(0, 3);
       text(ls, label, Font.semiboldSystemFont(9));
       ls.addSpacer();
     }
@@ -173,7 +175,7 @@ function build(C, r, kp, img, zone, opts) {
   const name = r.drone.name.replace("DJI ", "");
   text(left, (n.daylight ? "Now " : "Night ") + n.time.slice(11, 16) + " · " + name, Font.semiboldSystemFont(small ? 10 : 12));
   if (!small) {
-    const kpToday = kp.byDate[r.days[0].date];
+    const kpToday = kp.byDate[n.time.slice(0, 10)];
     text(left, "Gust " + C.fmtWind(n.windMax, opts.unit) + " · Kp " + (kpToday != null ? kpToday.toFixed(1) : "–"), Font.systemFont(12), MUTED);
     if (zone) text(left, "⚠︎ " + zone, Font.semiboldSystemFont(11));
     else if (opts.note) text(left, opts.note, Font.systemFont(10), MUTED);
@@ -205,7 +207,7 @@ function errorWidget(msg) {
 let widget;
 try {
   const [drone, rules, unit, yellow] = (args.widgetParameter || "").split("|").map((s) => s && s.trim());
-  const opts = { drone: drone || "mini-4-pro", rules: rules || "private", unit: unit || "kmh", yellow: +yellow || 70 };
+  const opts = { drone: (drone || "mini-4-pro").toLowerCase(), rules: (rules || "private").toLowerCase(), unit: (unit || "kmh").toLowerCase(), yellow: +yellow || 70 };
   const C = await loadCore();
   const loc = await location();
   const [raw, airspace] = await Promise.all([loadData(C, loc), cachedJson("data/airspace.json", "airspace.json", 72)]);
