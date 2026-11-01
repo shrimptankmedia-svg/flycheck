@@ -1,0 +1,53 @@
+name: Deploy to GitHub Pages
+
+# Rebuilds every 30 minutes so the METAR/TAF data stays fresh. The ATNS
+# airspace file is downloaded at most once a day (cached per date).
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch METAR/TAF
+        run: node scripts/fetch-aviation.mjs site/data/aviation.json
+        continue-on-error: true
+      - id: day
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/rsa.zip
+          key: atns-airspace-${{ steps.day.outputs.date }}
+      - name: Refresh ATNS airspace
+        # Falls back to the copy committed in site/data if ATNS is unreachable.
+        run: |
+          [ -s /tmp/rsa.zip ] || curl -sfL -o /tmp/rsa.zip "https://www.atns.com/Aeronautical%20Information%20Management/RSA%20Airspaces%20in%203D/RSA%20DATA.zip"
+          unzip -o -q /tmp/rsa.zip -d /tmp/rsa
+          python3 scripts/build_airspace.py "$(ls /tmp/rsa/*.kmz | head -n 1)" site/data
+        continue-on-error: true
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
