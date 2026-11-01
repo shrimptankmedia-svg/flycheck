@@ -5,7 +5,7 @@ A 7-day drone flying forecast for DJI pilots in South Africa. It has two parts:
 - **Web app** (`site/`): add it to your iPhone Home Screen. It has four tabs:
   - **Now:** a green/yellow/red status card for your drone, the gust meter, conditions, the best flying window, and an airspace warning.
   - **7-day:** a flyable-hours chart and a stack of day cards with hourly bars.
-  - **Hangar:** pick your DJI drone and SACAA rules (Private or RPL/ROC) and set the yellow threshold.
+  - **Hangar:** pick your DJI drone (Mini, Air, Mavic, Avata/FPV or Phantom 4) and SACAA rules (Private or RPL/ROC) and set the yellow threshold.
   - **Airspace:** a live map of ground-to-500 ft airspace from ATNS, which zones you're inside, aerodromes within 10 km, and the nearest METAR/TAF.
 - **Scriptable widget** (`scriptable/FlyCheck.js`): a Home Screen widget in the status colour, with the drone illustration, an airspace warning and a dot for each of the next 7 days.
 
@@ -76,7 +76,7 @@ restricted area you get a coral or yellow warning, depending on your rules (`AIR
   TMAs, CTAs and routes start far higher and are dropped. ATNS calls the file a "gross representation", so always check the AIP and NOTAMs.
 - **Map:** OpenStreetMap tiles, shown in greyscale.
 - **Drone specs:** dji.com spec pages. Each model in `site/core.js` is marked `verified: true` if it was re-checked for this build.
-- **Drone illustrations:** drawn by `scripts/draw_drones.py` from DJI product photos (Mini 4 Pro, Air 3S, Mavic 4 Pro, Avata 2). Each family shares one drawing, so the Mavic 3 uses the Mavic 4 Pro's round camera pod and the Neo and FPV use the Avata's.
+- **Drone illustrations:** drawn by `scripts/draw_drones.py` from DJI product photos (Mini 4 Pro, Air 3S, Mavic 4 Pro, Avata 2, Phantom 4 Pro V2.0). Each family shares one drawing, so the Mavic 3 uses the Mavic 4 Pro's round camera pod and the Neo and FPV use the Avata's.
 
 ## Files
 - `site/core.js`: drones, SACAA rules, rating and airspace logic. The widget downloads this file too.

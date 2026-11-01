@@ -26,6 +26,10 @@
     { id: "avata-2",     family: "Avata / FPV", name: "DJI Avata 2", weightG: 377,  maxWindMs: 10.7, tempMinC: -10, tempMaxC: 40, verified: true },
     // DJI lists 39–49 km/h; the lower bound is used.
     { id: "fpv",         family: "Avata / FPV", name: "DJI FPV",     weightG: 795,  maxWindMs: 10.8, tempMinC: -10, tempMaxC: 40, verified: false },
+    { id: "phantom-4-pro-v2", family: "Phantom", name: "DJI Phantom 4 Pro V2.0", weightG: 1375, maxWindMs: 10, tempMinC: 0, tempMaxC: 40, verified: false },
+    { id: "phantom-4-adv",    family: "Phantom", name: "DJI Phantom 4 Advanced", weightG: 1368, maxWindMs: 10, tempMinC: 0, tempMaxC: 40, verified: false },
+    { id: "phantom-4-rtk",    family: "Phantom", name: "DJI Phantom 4 RTK",      weightG: 1391, maxWindMs: 10, tempMinC: 0, tempMaxC: 40, verified: false },
+    { id: "phantom-4-ms",     family: "Phantom", name: "DJI Phantom 4 Multispectral", weightG: 1487, maxWindMs: 10, tempMinC: 0, tempMaxC: 40, verified: false },
   ];
 
   // ---------------------------------------------------------------------------
@@ -313,7 +317,7 @@
 
   function illusFor(drone) {
     if (drone.id === "neo") return "avata";
-    return { Mini: "mini", Air: "air", Mavic: "mavic" }[drone.family] || "avata";
+    return { Mini: "mini", Air: "air", Mavic: "mavic", Phantom: "phantom" }[drone.family] || "avata";
   }
 
   // ---------------------------------------------------------------------------

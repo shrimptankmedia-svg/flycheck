@@ -1,10 +1,10 @@
 // App shell cache-first; data (forecast, Kp, METAR) is always fetched live
 // and the app keeps its own last-good copy in localStorage.
-const SHELL = "flycheck-shell-v2";
+const SHELL = "flycheck-shell-v3";
 const FILES = [
   "./", "index.html", "style.css", "core.js", "app.js", "manifest.webmanifest",
   "data/aerodromes.json", "data/airspace.json", "icons/icon-180.png", "icons/icon-192.png", "icons/mark.png",
-  "illus/mini.png", "illus/air.png", "illus/mavic.png", "illus/avata.png",
+  "illus/mini.png", "illus/air.png", "illus/mavic.png", "illus/avata.png", "illus/phantom.png",
 ];
 
 self.addEventListener("install", (e) => {

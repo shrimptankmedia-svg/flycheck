@@ -152,6 +152,47 @@ avata = svg(
     + f'<rect x="198" y="88" width="5" height="32" rx="2.5" fill="{ORANGE}" {O}/>',
     vb="0 0 340 170")
 
-for name, s in (("mini", mini), ("air", air), ("mavic", mavic), ("avata", avata)):
+# ---------------------------------------------------------------- Phantom 4 Pro V2.0
+# Fixed X frame: white shell, straight arms, landing gear with skids, gimbal
+# hanging in the middle.
+def phantom_svg():
+    W = "#F4F4F1"
+    s = ""
+    # rear arms, motors, props
+    for sx in (-1, 1):
+        mx = 170 + sx * 86; my = 40
+        s += arm(170 + sx * 24, 58, mx, my + 4, 9, W)
+        s += motor(mx, my, 7.5, W)
+        s += prop(mx, my - 7, 28 if sx < 0 else 152, 54, 8, "#B9BCC0", False)
+    # landing gear (behind the shell, in front of rear arms)
+    for sx in (-1, 1):
+        top, foot = 170 + sx * 28, 170 + sx * 58
+        s += arm(top, 92, foot, 146, 6, W)
+        s += f'<rect x="{foot - 22}" y="143" width="44" height="9" rx="4.5" fill="{W}" {O}/>'
+        s += f'<path d="M{foot - 14},{147.5} L{foot + 14},{147.5}" stroke="#7E8187" stroke-width="2" stroke-linecap="round"/>'
+    # shell
+    s += (f'<path d="M126,80 C126,50 146,36 170,36 C194,36 214,50 214,80 '
+          f'C214,96 196,102 170,102 C144,102 126,96 126,80 Z" fill="{W}" {O}/>'
+          f'<path d="M134,74 C150,82 190,82 206,74" fill="none" stroke="#C9A55C" stroke-width="3" stroke-linecap="round"/>'
+          f'<path d="M150,46 C160,40 180,40 190,46" fill="none" stroke="#B9BCC0" stroke-width="2.4" stroke-linecap="round"/>')
+    s += eye(152, 88, 5.5) + eye(188, 88, 5.5)
+    # front arms, motors, props (with the grey arm stripe)
+    for sx in (-1, 1):
+        mx = 170 + sx * 122; my = 80
+        s += arm(170 + sx * 36, 78, mx, my + 4, 10, W)
+        s += f'<path d="M{170 + sx * 44},{77} L{mx - sx * 12},{my + 2}" stroke="#7E8187" stroke-width="2.2" stroke-linecap="round"/>'
+        s += motor(mx, my, 8, W)
+        s += prop(mx, my - 7, 152 if sx < 0 else 28, 58, 8.5, "#B9BCC0", False)
+    # gimbal + camera
+    s += (f'<rect x="162" y="98" width="16" height="12" rx="3" fill="#2B2D31" {O}/>'
+          f'<path d="M150,108 L190,108 L190,114 L150,114 Z" fill="#3A3D42" {O}/>'
+          f'<rect x="153" y="112" width="34" height="28" rx="8" fill="#2B2D31" {O}/>'
+          f'<circle cx="170" cy="126" r="9" fill="#5B5F66" {O}/>'
+          f'<circle cx="170" cy="126" r="4" fill="#111111"/><circle cx="167" cy="123" r="1.7" fill="#FFFFFF"/>')
+    return svg(s)
+
+phantom = phantom_svg()
+
+for name, s in (("mini", mini), ("air", air), ("mavic", mavic), ("avata", avata), ("phantom", phantom)):
     open(f"{OUT}/drone-{name}.svg", "w").write(s)
 print("ok")
